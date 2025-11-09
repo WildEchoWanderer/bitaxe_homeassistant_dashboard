@@ -4,59 +4,52 @@
 # Instead, add these sections to your existing configuration.yaml
 # This is part of a complete dashboard setup.
 # For full documentation and installation instructions:
-# 👉 See: https://github.com/satoshiradio/bitaxe-HAS-dashboard/README.md
+# 👉 See: https://github.com/WildEchoWanderer/bitaxe_homeassistant_dashboard
 #########################################################################
 
 #-------------------------------------------------------------------
-# 1. Add this line to enable the BitAxe integration
+# 1. Add this line to enable the integration
 # Add this where you keep your other !include statements
 #-------------------------------------------------------------------
-rest: !include bitaxe.yaml
+rest: !include miner.yaml
 
 #-------------------------------------------------------------------
 # 2. Add this template section
+# 3. Delete what you don't need (miners, pools)
 # If you already have a template: section, only add the sensors below it
 #-------------------------------------------------------------------
 template:
   - sensor:
       # Total Hashrate in GH/s
-      - name: "total_hashrate"
-        unit_of_measurement: "GH/s"
+      - name: "Total Hashrate"
+        unique_id: miners_total_hashrate
+        unit_of_measurement: "TH/s"
         state: >
-          {% set total = states('sensor.nerdaxe_hashrate')|float(0) + 
-                        states('sensor.supra_hashrate')|float(0) + 
+          {% set total = states('sensor.nerdqaxe_hashrate')|float(0) +
+                        states('sensor.nerdaxe_hashrate')|float(0) +
+                        states('sensor.supra_hashrate')|float(0) +
                         states('sensor.gamma_hashrate')|float(0) %}
           {{ total | round(2) }}
 
-      # Total Hashrate in TH/s
-      - name: "total_hashrate_th"
-        unit_of_measurement: "TH/s"
-        state: >
-          {% set total = states('sensor.nerdaxe_hashrate')|float(0) + 
-                        states('sensor.supra_hashrate')|float(0) + 
-                        states('sensor.gamma_hashrate')|float(0) %}
-          {{ (total / 1000) | round(3) }}
-
-      # Pool hashrate in TH/s
-      - name: "bitaxe_sr_hashrate1hr_th"
-        unit_of_measurement: "TH/s"
-        state: >
-          {% set gh_value = states('sensor.bitaxe_sr_hashrate1hr')|float(0) %}
-          {{ (gh_value / 1000) | round(1) }}
-
       # Total Power
-      - name: "total_power"
+      - name: "Total Power"
+        unique_id: miners_total_power
         unit_of_measurement: "W"
         state: >
-          {% set total = states('sensor.nerdaxe_power')|float(0) + 
-                        states('sensor.supra_power')|float(0) + 
+          {% set total = states('sensor.nerdqaxe_power')|float(0) +
+                        states('sensor.nerdaxe_power')|float(0) +
+                        states('sensor.supra_power')|float(0) +
                         states('sensor.gamma_power')|float(0) %}
           {{ total | round(2) }}
 
       # Miners Online Count
-      - name: "miners_online"
+      - name: "Miners online"
+        unique_id: miners_online
         state: >
           {% set online = namespace(count=0) %}
+          {% if states('sensor.nerdqaxe_hashrate')|float(0) > 0 %}
+            {% set online.count = online.count + 1 %}
+          {% endif %}
           {% if states('sensor.nerdaxe_hashrate')|float(0) > 0 %}
             {% set online.count = online.count + 1 %}
           {% endif %}
@@ -68,23 +61,26 @@ template:
           {% endif %}
           {{ online.count }}
 
-      # Total Efficiency
-      - name: "total_efficiency"
-        unit_of_measurement: "GH/W"
+      # Total Efficiency (W/TH)
+      - name: "Total efficiency"
+        unique_id: miners_total_efficiency
+        unit_of_measurement: "W/TH"
         state: >
-          {% set hashrate = states('sensor.total_hashrate')|float(0) %}
           {% set power = states('sensor.total_power')|float(0) %}
-          {% if power > 0 %}
-            {{ (hashrate / power) | round(2) }}
+          {% set total_th = states('sensor.total_hashrate_th')|float(0) %}
+          {% if total_th > 0 %}
+            {{ (power / total_th) | round(3) }}
           {% else %}
             0
           {% endif %}
 
       # Total Uptime
-      - name: "total_uptime"
+      - name: "Total uptime"
+        unique_id: miners_total_uptime
         unit_of_measurement: "hours"
         state: >
           {% set uptimes = [
+            states('sensor.nerdqaxe_uptime')|float(0),
             states('sensor.nerdaxe_uptime')|float(0),
             states('sensor.supra_uptime')|float(0),
             states('sensor.gamma_uptime')|float(0)
@@ -92,35 +88,106 @@ template:
           {{ uptimes | sum | round(2) }}
 
       # Miners Overheated (threshold at 85°C)
-      - name: "miners_overheated"
+      - name: "Miners overheated"
+        unique_id: miners_overheated
         state: >
           {% set overheated = namespace(count=0) %}
-          {% if states('sensor.nerdaxe_temp')|float(0) > 85 %}
+          {% if states('sensor.nerdqaxe_temperature')|float(0) > 85 %}
             {% set overheated.count = overheated.count + 1 %}
           {% endif %}
-          {% if states('sensor.supra_temp')|float(0) > 85 %}
+          {% if states('sensor.nerdaxe_temperature')|float(0) > 85 %}
             {% set overheated.count = overheated.count + 1 %}
           {% endif %}
-          {% if states('sensor.gamma_temp')|float(0) > 85 %}
+          {% if states('sensor.supra_temperature')|float(0) > 85 %}
+            {% set overheated.count = overheated.count + 1 %}
+          {% endif %}
+          {% if states('sensor.gamma_temperature')|float(0) > 85 %}
             {% set overheated.count = overheated.count + 1 %}
           {% endif %}
           {{ overheated.count }}
 
-      # SR Pool Rejection Rate
-      - name: "srpool_rejection_rate"
+      # NerdQAxe Acception Rates
+      - name: "NerdQAxe Acception Rate"
+        unique_id: nerdqaxe_acception_rate
         unit_of_measurement: "%"
         state: >
-          {% set accepted = states('sensor.srpool_accepted_shares')|float(0) %}
-          {% set rejected = states('sensor.srpool_rejected_shares')|float(0) %}
+          {% set accepted = states('sensor.nerdqaxe_shares_accepted')|float(0) %}
+          {% set rejected = states('sensor.nerdqaxe_shares_rejected')|float(0) %}
           {% if accepted + rejected > 0 %}
-            {{ ((rejected / (accepted + rejected)) * 100) | round(3) }}
+            {{ ((accepted / (accepted + rejected)) * 100) | round(3) }}
           {% else %}
             0
           {% endif %}
 
+      # NerdAxe Acception Rate
+      - name: "NerdAxe Acception Rate"
+        unique_id: nerdaxe_acception_rate
+        unit_of_measurement: "%"
+        state: >
+          {% set accepted = states('sensor.nerdaxe_shares_accepted')|float(0) %}
+          {% set rejected = states('sensor.nerdaxe_shares_rejected')|float(0) %}
+          {% if accepted + rejected > 0 %}
+            {{ ((accepted / (accepted + rejected)) * 100) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+
+      # Supra Acception Rate
+      - name: "Supra Acception Rate"
+        unique_id: supra_acception_rate
+        unit_of_measurement: "%"
+        state: >
+          {% set accepted = states('sensor.supra_shares_accepted')|float(0) %}
+          {% set rejected = states('sensor.supra_shares_rejected')|float(0) %}
+          {% if accepted + rejected > 0 %}
+            {{ ((accepted / (accepted + rejected)) * 100) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+
+      # Gamma Acception Rate
+      - name: "Gamma Acception Rate"
+        unique_id: gamma_acception_rate
+        unit_of_measurement: "%"
+        state: >
+          {% set accepted = states('sensor.gamma_shares_accepted')|float(0) %}
+          {% set rejected = states('sensor.gamma_shares_rejected')|float(0) %}
+          {% if accepted + rejected > 0 %}
+            {{ ((accepted / (accepted + rejected)) * 100) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+
+      # CKPool Acception Rate
+      - name: "CKPool Acception Rate"
+        unique_id: ckpool_accepted_rate
+        unit_of_measurement: "%"
+        state: >
+          {% set accepted = states('sensor.ckpool_accepted_shares')|float(0) %}
+          {% set rejected = states('sensor.ckpool_rejected_shares')|float(0) %}
+          {% if accepted + rejected > 0 %}
+            {{ ((accepted / (accepted + rejected)) * 100) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+
+      # Satoshiradio Pool Acception Rate
+      - name: "Satoshiradio Pool Acception Rate"
+        unique_id: satoshiradio_pool_accepted_rate
+        unit_of_measurement: "%"
+        state: >
+          {% set accepted = states('sensor.satoshiradio_pool_accepted_shares')|float(0) %}
+          {% set rejected = states('sensor.satoshiradio_pool_rejected_shares')|float(0) %}
+          {% if accepted + rejected > 0 %}
+            {{ ((accepted / (accepted + rejected)) * 100) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+
+
 #########################################################################
 # INSTALLATION NOTES:
-# 1. These additions require the bitaxe.yaml file to be in your config folder
+# 1. These additions require the miner.yaml file to be in your config folder
 # 2. If you have fewer/more miners, adjust the template sensors accordingly
 # 3. After adding these, restart Home Assistant
 # 4. See the README for full installation instructions
